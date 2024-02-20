@@ -66,7 +66,7 @@ def getmatches(profile, proftime):
             if i["playerLeft"]["result"] == "win":
                 winner = i["playerLeft"]["profileURL"]
                 loser = i["playerRight"]["profileURL"]
-            else:
+            if i["playerRight"]["result"] == "win":
                 winner = i["playerRight"]["profileURL"]
                 loser = i["playerLeft"]["profileURL"]
             minidelta = minidelta+datetime.timedelta(microseconds=2000)
