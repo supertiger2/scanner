@@ -52,10 +52,9 @@ def getlb(lburl):
     lb += r['body']
     return lb
 
-def getmatches(profile, proftime):
+def getmatches(profile, scantime):
     matchurl = profile["body"]["matches"]
     r = nkapi.get(matchurl).json()
-    minidelta = datetime.timedelta(microseconds=2000)
     for i in reversed(r["body"]):
         mtable = "umatches"
         if i["gametype"] == "Ranked":
@@ -69,10 +68,9 @@ def getmatches(profile, proftime):
             if i["playerRight"]["result"] == "win":
                 winner = i["playerRight"]["profileURL"]
                 loser = i["playerLeft"]["profileURL"]
-            minidelta = minidelta+datetime.timedelta(microseconds=2000)
-            mongoclient["b2"][mtable].insert_one({"_id": i["id"], "date": proftime+minidelta, "season": season, "winner": winner, "loser": loser, "body": i})
+            mongoclient["b2"][mtable].insert_one({"_id": i["id"], "date": scantime, "season": season, "winner": winner, "loser": loser, "body": i})
 
-def getplayer_hom(lbentry, place):
+def getplayer_hom(lbentry, place, scantime):
     r = nkapi.get(lbentry["profile"]).json()
     plid = lbentry["profile"]
     score = lbentry["score"]
@@ -82,16 +80,13 @@ def getplayer_hom(lbentry, place):
     playerentry["__score"] = score
     del playerentry["accolades"]
     #del playerentry["badges_all"]
+    getmatches(r, scantime)
     lasttime = mongoclient["b2"]['players'].find_one({"plid":plid, "season": season}, sort=[("date", -1)])
     if (lasttime == None):
-        proftime = gettime()
-        mongoclient["b2"]['players'].insert_one({"plid": plid, "date": proftime-datetime.timedelta(seconds=10) , "season": season, "priv": False, "zomg": False, "score": 3500, "place": 0, "body": playerentry})
-        getmatches(r, proftime)
-        mongoclient["b2"]['players'].insert_one({"plid": plid, "date": proftime, "season": season, "priv": False, "zomg": False, "score": score, "place": place, "body": playerentry})
+        mongoclient["b2"]['players'].insert_one({"plid": plid, "date": scantime-datetime.timedelta(seconds=10) , "season": season, "priv": False, "zomg": False, "score": 3500, "place": 0, "body": playerentry})
+        mongoclient["b2"]['players'].insert_one({"plid": plid, "date": scantime, "season": season, "priv": False, "zomg": False, "score": score, "place": place, "body": playerentry})
     elif not lasttime["body"] == playerentry:
-        proftime = gettime()
-        getmatches(r, proftime)
-        mongoclient["b2"]['players'].insert_one({"plid": plid, "date": proftime, "season": season, "priv": False, "zomg": False, "score": score, "place": place, "body": playerentry})
+        mongoclient["b2"]['players'].insert_one({"plid": plid, "date": scantime, "season": season, "priv": False, "zomg": False, "score": score, "place": place, "body": playerentry})
     return playerentry["displayName"]
 
 if __name__ == "__main__":
@@ -112,16 +107,17 @@ if __name__ == "__main__":
             season_end = s[1]
             lburl = s[2]
         stime = time.time()
+        scantime = gettime()
         lb = getlb(lburl)
         #print(lb, flush=True)
         namelist = []
         for place, i in enumerate(lb):
-            pname = getplayer_hom(i, place+1)
+            pname = getplayer_hom(i, place+1, scantime)
             namelist.append(pname)
             #timestr = str(datetime.datetime.now())
             #print(f"[{timestr}] updated {place}", flush=True)
-        mongoclient["b2"]['lb'].insert_one({"date": gettime(), "season": season, "lbsize": len(lb), "lb": lb, "namelist": namelist})
-        interval = 60*6
+        mongoclient["b2"]['lb'].insert_one({"date": scantime, "season": season, "lbsize": len(lb), "lb": lb, "namelist": namelist})
+        interval = 60*3
         timestr = str(datetime.datetime.now())
         print(f"[{timestr}] Updated {len(lb)} players, it took {round(time.time()-stime)}s ({round(interval-(time.time()-stime))}s to wait)", flush=True)
         if interval-(time.time()-stime) > 0:
