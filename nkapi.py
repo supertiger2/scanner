@@ -10,10 +10,9 @@ def get(endpoint):
             if r.status_code == 200:
                 return r
             if r.status_code == 403:
-                time.sleep(27)
-            time.sleep(3)
+                time.sleep(31)
         except:
-            time.sleep(10)
+            time.sleep(5)
         bad += 1
         if bad == 4:
             time.sleep(60)

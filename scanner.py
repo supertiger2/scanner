@@ -22,7 +22,7 @@ def getseason():
             else:
                 mongoclient["sutil"]["slist"].update_one({"_id": thing["_id"]}, {"$set": thing})
             #if (i['start'] <= time.time()*1000) and
-            if (i['start'] > latestbeg):
+            if (i['start'] > latestbeg) and (i['start'] <= time.time()*1000):
                 latest = i
                 latestbeg = i['end']
                 seasonN = [int(i) for i in i["name"].split() if i.isdigit()][0]
@@ -35,8 +35,12 @@ def getseason():
             print(f"Found currenttly active season {season} (ending at {season_end})", flush=True)
             mongoclient["b2"]["players"].create_index(["plid", ("date", -1)], background=True)
             mongoclient["b2"]["players"].create_index(["season", "plid", ("date", -1)], background=True)
+            mongoclient["b2"]["players"].create_index(["season", ("date", -1)], background=True)
+            mongoclient["b2"]["players"].create_index(["season"], background=True)
             mongoclient["b2"]["lb"].create_index(["season", ("date", -1)], background=True)
             mongoclient["b2"]["lb"].create_index([("date", -1)], background=True)
+            mongoclient["b2"]["matches"].create_index([("date", -1)], background=True)
+            mongoclient["b2"]["matches"].create_index(["season", ("date", -1)], background=True)
             mongoclient["b2"]["matches"].create_index(["season", "winner", ("date", -1)], background=True)
             mongoclient["b2"]["matches"].create_index(["season", "loser", ("date", -1)], background=True)
             mongoclient["b2"]["matches"].create_index(["season", "winner"], background=True)
@@ -56,7 +60,7 @@ def getlb(lburl):
     lb += r['body']
     return lb
 
-def getmatches(profile, plid, lblist, scantime):
+def getmatches(profile, lbentry, plid, lblist, scantime):
     matchurl = profile["body"]["matches"]
     r = nkapi.get(matchurl).json()
     if (mongoclient['b2']['latestm'].find_one({"_id": plid})==None) and (len(r["body"]) > 0):
@@ -65,7 +69,7 @@ def getmatches(profile, plid, lblist, scantime):
         mtable = "umatches"
         if i["gametype"] == "Ranked":
             mtable = "matches"
-        if i["gametype"] == "Ranked" and ((not mongoclient["b2"]["zmatches"].find_one({"_id":i["id"]}) == None) or (not (i["playerRight"]["profileURL"] in lblist and i["playerLeft"]["profileURL"] in lblist))):
+        if i["gametype"] == "Ranked" and ((not mongoclient["b2"]["zmatches"].find_one({"_id":i["id"]}) == None) or (not lbentry['currentlyInHoM'])):
             mtable = "zmatches"
         winner = "draw"
         loser = "draw"
@@ -80,7 +84,6 @@ def getmatches(profile, plid, lblist, scantime):
         if mtable == "matches":
             mongoclient['b2']['latestm'].update_one({"_id": plid}, {"$set": {"_id": plid, "match": {"_id": i["id"], "date": scantime, "season": season, "winner": winner, "loser": loser, "body": i}}})
 
-
 def getplayer_hom(lbentry, place, lblist, scantime):
     r = nkapi.get(lbentry["profile"]).json()
     plid = lbentry["profile"]
@@ -91,7 +94,7 @@ def getplayer_hom(lbentry, place, lblist, scantime):
     playerentry["__score"] = score
     del playerentry["accolades"]
     #del playerentry["badges_all"]
-    getmatches(r, plid, lblist, scantime)
+    getmatches(r, lbentry, plid, lblist, scantime)
     lasttime = mongoclient["b2"]['players'].find_one({"plid":plid, "season": season}, sort=[("date", -1)])
     if (lasttime == None):
         mongoclient["b2"]['players'].insert_one({"plid": plid, "date": scantime-datetime.timedelta(seconds=10) , "season": season, "priv": False, "zomg": False, "score": 3500, "place": 0, "body": playerentry})
